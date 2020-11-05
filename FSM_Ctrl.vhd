@@ -4,8 +4,8 @@ use ieee.std_logic_1164.all;
 
 entity FSM_Ctrl is
 Generic (
-    ADDR_WIDTH : natural := 4,
-    DATA_WIDTH : natural := 4
+    DATA_WIDTH : natural := 4;
+    ADDR_WIDTH : natural := 4
 );
 Port (
     piClk : in STD_LOGIC ;
@@ -20,16 +20,16 @@ architecture ArchFSM_Ctrl of FSM_Ctrl is
 
     signal sWritingInRAM : std_logic;
     signal sWritingInRAMAddress, sFutureWritingInRAMAddress : std_logic_vector(ADDR_WIDTH-1 downto 0);
-    signal sWritingInRAMData : sFutureWritingInRAMData std_logic_vector(DATA_WIDTH-1 downto 0);
-
+    signal sWritingInRAMData, sFutureWritingInRAMData  : std_logic_vector(DATA_WIDTH-1 downto 0);
+    signal sRAMOutputData : std_logic_vector(DATA_WIDTH-1 downto 0);
     signal sWritingInLFSR : std_logic; 
     signal sLFSREnabled : std_logic;
-    signal sLSFRLoadSeed : std_logic;
-    signal sLSFRSeed : std_logic_vector(15 downto 0);
+    signal sLFSRLoadSeed : std_logic;
+    signal sLFSRSeed : std_logic_vector(15 downto 0);
     signal sLFSROut : std_logic_vector(15 downto 0);
     --signal 
 
-    type tState is (Init, Idle, Resetting)
+    type tState is (Init, Idle, Resetting);
     signal sState, sFutureState : tState;
 
     component RAM is
@@ -59,7 +59,7 @@ architecture ArchFSM_Ctrl of FSM_Ctrl is
 
 begin
 
-    ram : RAM 
+    uram : RAM 
     generic map(ADDR_WIDTH => ADDR_WIDTH, DATA_WIDTH => DATA_WIDTH)    
     port map(
         piClk => piClk,
@@ -69,11 +69,11 @@ begin
         poData => sRAMOutputData
     );
 
-    lfsr16 : LFSR16
+    ulfsr16 : LFSR16
     port map(
         piClk => piClk,
         piRst => piRst,
-        piEna => sLFSREnabled
+        piEna => sLFSREnabled,
         piLoadSeed => sLFSRLoadSeed,
         piSeed => sLFSRSeed,
         poQ => sLFSROut
@@ -88,25 +88,25 @@ begin
         end if;
     end process ; -- main
 
-    sFutureStateHandler : process( piRst, state )
+    sFutureStateHandler : process( piRst, sState )
     begin
         if(piRst = '1') then
-            sFutureState <= Reset;
+            sFutureState <= Resetting;
             sWritingInRAM <= '1';
             sFutureWritingInRAMData <= (others => '0');
             sFutureWritingInRAMAddress <= (others => '0');
             sFutureState <= Resetting;
             sLFSREnabled <= '0';
-            sLSFRLoadSeed <= '1';
-            sLSFRSeed <= (others => '1');
+            sLFSRLoadSeed <= '1';
+            sLFSRSeed <= (others => '1');
         else
-            case(state) is
+            case(sState) is
                 when Resetting =>
-                    if(sWritingInRAMAddress == (others => '1')) then -- Si no funciona, cambiar por to_unsigned(2**N -1, N)
+                    if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then -- Si no funciona, cambiar por to_unsigned(2**N -1, N)
                         sWritingInRAM <= '0';
                         sFutureState <= Init;
                     else
-                        sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + unsigned(1,sFutureWritingInRAMAddress'Length))
+                        sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + to_unsigned(1,sFutureWritingInRAMAddress'Length));
                         sFutureState <= Resetting;
                     end if;    
                 when Idle => 
@@ -116,16 +116,16 @@ begin
                         sFutureState <= Idle;
                     end if;
                 when Init =>
-                    if(sWritingInRAMAddress == (others => '1')) then
+                    if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then
                         sWritingInRAM <= '0';
                         sFutureState <= Idle;
                     else
                         sWritingInRAM <= '1';
-                        sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + unsigned(1,sFutureWritingInRAMAddress'Length))
+                        sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + to_unsigned(1,sFutureWritingInRAMAddress'Length));
                         sFutureWritingInRAMData <= sLFSROut;
                         sFutureState <= Init;
                     end if;
-                when others => futureState <= Resetting;
+                when others => sFutureState <= Resetting;
             end case ;
         end if;
 
