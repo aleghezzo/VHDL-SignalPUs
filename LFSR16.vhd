@@ -26,7 +26,7 @@ begin
                 sRegs <= (others => '0');
             elsif(piLoadSeed = '1') then
                 sRegs <= piSeed; 
-            elsif(piEna = '1')
+            elsif(piEna = '1') then
                 sRegs <= sFutureRegs;
             else
                 sRegs <= sRegs;
