@@ -23,9 +23,9 @@ architecture ArchRAM of RAM is
 
 begin
 
-    process(clk)
+    process(piClk)
     begin
-        if rising_edge(clk) then
+        if rising_edge(piClk) then
             --if piRst = '1' then 
             --    RAM <= (others => (others => '0'));
             --els
