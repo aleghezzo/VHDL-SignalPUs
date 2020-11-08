@@ -27,7 +27,7 @@ architecture ArchFSM_Ctrl of FSM_Ctrl is
     signal sLFSRLoadSeed : std_logic;
     signal sLFSRSeed : std_logic_vector(15 downto 0);
     signal sLFSROut : std_logic_vector(15 downto 0);
-    --signal 
+    signal sWaiting : std_logic;
 
     type tState is (Init, Idle, Resetting);
     signal sState, sFutureState : tState;
@@ -57,6 +57,14 @@ architecture ArchFSM_Ctrl of FSM_Ctrl is
         );
     end component LFSR16 ;
 
+    component SimpleCounter is
+        Port (
+            piClk : in STD_LOGIC ;
+            piRst : in STD_LOGIC ;
+            piEna : in STD_LOGIC ;
+            poQ : out STD_LOGIC_VECTOR (16 -1 downto 0)
+        ) ;
+    end component SimpleCounter;
 begin
 
     uram : RAM 
@@ -68,16 +76,25 @@ begin
         piData => sWritingInRAMData,
         poData => sRAMOutputData
     );
-
-    ulfsr16 : LFSR16
-    port map(
-        piClk => piClk,
-        piRst => piRst,
-        piEna => sLFSREnabled,
-        piLoadSeed => sLFSRLoadSeed,
-        piSeed => sLFSRSeed,
-        poQ => sLFSROut
-    );
+    if '1' generate
+        ulfsr16 : LFSR16
+        port map(
+            piClk => piClk,
+            piRst => piRst,
+            piEna => sLFSREnabled,
+            piLoadSeed => sLFSRLoadSeed,
+            piSeed => sLFSRSeed,
+            poQ => sLFSROut
+        );
+    else 
+        usimplecounter : SimpleCounter
+        port map(
+            piClk => piClk,
+            piRst => piRst,
+            piEna => sLFSREnabled,
+            poQ => sLFSROut
+        );  
+    end if;
 
     main : process(piClk)
     begin
@@ -93,16 +110,14 @@ begin
         if(piRst = '1') then
             sFutureState <= Resetting;
             sWritingInRAM <= '1';
-            sFutureWritingInRAMData <= (others => '0');
+            sFutureWritingInRAMData <= (others => '0'); 
             sFutureWritingInRAMAddress <= (others => '0');
             sFutureState <= Resetting;
             sLFSREnabled <= '0';
-            sLFSRLoadSeed <= '1';
-            sLFSRSeed <= (others => '1');
         else
             case(sState) is
                 when Resetting =>
-                    if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then -- Si no funciona, cambiar por to_unsigned(2**N -1, N)
+                    if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then
                         sWritingInRAM <= '0';
                         sFutureState <= Init;
                     else
@@ -118,8 +133,10 @@ begin
                 when Init =>
                     if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then
                         sWritingInRAM <= '0';
+                        sLFSRLoadSeed <= '0';
                         sFutureState <= Idle;
                     else
+                        sLFSRLoadSeed <= '1';
                         sWritingInRAM <= '1';
                         sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + to_unsigned(1,sFutureWritingInRAMAddress'Length));
                         sFutureWritingInRAMData <= sLFSROut;
@@ -130,6 +147,8 @@ begin
         end if;
 
     end process ; -- sFutureStateHandler
+
+    sLFSRSeed <= (others => '1');
 
 
 end ArchFSM_Ctrl ; -- ArchFSM_Ctrl

@@ -26,9 +26,6 @@ begin
     process(piClk)
     begin
         if rising_edge(piClk) then
-            --if piRst = '1' then 
-            --    RAM <= (others => (others => '0'));
-            --els
             if piWr = '1' then
                 RAM(to_integer(unsigned(piAddr))) <= piData;
             else
