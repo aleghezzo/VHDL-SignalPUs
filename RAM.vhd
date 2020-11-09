@@ -18,7 +18,7 @@ end RAM;
 
 architecture ArchRAM of RAM is
 
-    type tRAM is array(2**DATA_WIDTH-1 downto 0) of std_logic_vector(ADDR_WIDTH-1 downto 0);
+    type tRAM is array(2**ADDR_WIDTH-1 downto 0) of std_logic_vector(DATA_WIDTH-1 downto 0);
     signal RAM : tRAM;
 
 begin

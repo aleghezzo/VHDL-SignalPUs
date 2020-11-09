@@ -1,6 +1,11 @@
+library ieee;
+use ieee.numeric_std.all;
+use ieee.std_logic_1164.all;
+use ieee.math_real.all;
+
 entity ByteDeSerializer is
     Generic (
-        DATA_WIDTH : natural := 8,
+        DATA_WIDTH : natural := 8;
         AMOUNT_IN : natural := 4
     );
     Port (
@@ -15,26 +20,26 @@ entity ByteDeSerializer is
     );
 end entity ByteDeSerializer ;
 
-architecture ArchByteDeSerializer of ArchByteDeSerializer is
+architecture ArchByteDeSerializer of ByteDeSerializer is
 
     type tRegisters is array(AMOUNT_IN-1 downto 0) of std_logic_vector(DATA_WIDTH downto 0);
     signal sRegisters, sFutureRegisters : tRegisters;
-    signal sStateCounter, sFutureStateCounter : unsigned(ceil(log2(2**(FIFO_DEPTH+2)))-1 downto 0) := (others => '0');
+    signal sStateCounter, sFutureStateCounter : unsigned(integer(ceil(log2(real(AMOUNT_IN)))) - 1 downto 0);
     signal sReady, sDone, sDataAvailable : std_logic;
-
+    signal sOutputCombination : std_logic_vector(AMOUNT_IN*DATA_WIDTH downto 0);
     begin
 
         clkProcess : process(piClk)
         begin
-            if rising_edge(piClk)
+            if rising_edge(piClk) then
                 sStateCounter <= sFutureStateCounter;
                 registerLoop : for i in sRegisters'range loop
-                    sRegister(i) <= sFutureRegisters(i)
-                end loop ;
+                    sRegisters(i) <= sFutureRegisters(i);
+                end loop;
             end if;
         end process ; -- clkProcess
     
-        main : process(piRst, piWriteMultiByte, piData, piReadSingleByte)
+        main : process(piRst, piReadMultiByte, piData, piWriteSingleByte)
         begin
             if(piRst = '1') then
                 sFutureStateCounter <= (others => '0');
@@ -43,22 +48,26 @@ architecture ArchByteDeSerializer of ArchByteDeSerializer is
                 end loop ;
             else
                 if(piWriteSingleByte = '1' and sReady = '1') then
-                    sFutureRegisters(sStateCounter) <= piData;
+                    sFutureRegisters(to_integer(sStateCounter)) <= piData;
                     sFutureStateCounter <= sStateCounter + to_unsigned(1, sFutureStateCounter'Length);
                 elsif(piReadMultiByte = '1' and sDone = '1') then
                     sFutureStateCounter <= sStateCounter - to_unsigned(1,sStateCounter'length);
                     sFutureRegisters <= sRegisters;
-                elsif
-                    sFutureStateCounter <= stateCounter;
+                else
+                    sFutureStateCounter <= sStateCounter;
                     sFutureRegisters <= sRegisters;
                 end if;
             end if;
         end process ; -- main
     
-        sReady <= '1' when not(sCounter = to_unsigned(AMOUNT_IN-1,sCounter'length)) else '0' when others;
-        sDataAvailable <= '1' when (sCounter = to_unsigned(AMOUNT_IN-1, sCounter'length)) else '0' when others;
+        Combination : for i in 0 to AMOUNT_IN generate
+            sOutputCombination((DATA_WIDTH*(i+1) - 1) downto DATA_WIDTH*i) <= sRegisters(i);
+        end generate;
+        
+        sReady <= '1' when not(sStateCounter = to_unsigned(AMOUNT_IN-1,sStateCounter'length)) else '0';
+        sDataAvailable <= '1' when (sStateCounter = to_unsigned(AMOUNT_IN-1, sStateCounter'length)) else '0';
         poDataAvailable <= sDataAvailable;
-        poRady <= sReady;
-        poData <= sRegisters;
+        poReady <= sReady;
+        poData <= sOutputCombination;
 
 end ArchByteDeSerializer ; -- ArchByteDeSerializer
