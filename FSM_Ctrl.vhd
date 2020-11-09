@@ -11,25 +11,24 @@ Port (
     piClk : in STD_LOGIC ;
     piRst : in STD_LOGIC ;
     piStart : in STD_LOGIC ;
-    poDone : in STD_LOGIC ;
+    poDone : out STD_LOGIC ;
     poSum : out STD_LOGIC_VECTOR (16 -1 downto 0)
 ) ;
 end entity FSM_Ctrl;
 
 architecture ArchFSM_Ctrl of FSM_Ctrl is
 
-    signal sWritingInRAM, sFutureWritingInRAM : std_logic;
-    signal sWritingInRAMAddress, sFutureWritingInRAMAddress : std_logic_vector(ADDR_WIDTH-1 downto 0);
-    signal sWritingInRAMData, sFutureWritingInRAMData  : std_logic_vector(DATA_WIDTH-1 downto 0);
+    signal sWritingInRAM, sFutureWritingInRAM : std_logic := '0';
+    signal sWritingInRAMAddress, sFutureWritingInRAMAddress : std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
+    signal sWritingInRAMData, sFutureWritingInRAMData  : std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0');
     signal sRAMOutputData : std_logic_vector(DATA_WIDTH-1 downto 0);
-    signal sWritingInLFSR : std_logic; 
-    signal sLFSREnabled : std_logic;
-    signal sLFSRLoadSeed : std_logic;
-    signal sLFSRSeed : std_logic_vector(DATA_WIDTH-1 downto 0);
+    signal sLFSREnabled : std_logic := '0';
+    signal sLFSRLoadSeed : std_logic := '0';
+    signal sLFSRSeed : std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '1');
     signal sLFSROut : std_logic_vector(DATA_WIDTH-1 downto 0);
-    signal sSum : std_logic_vector(poSum'length - 1 downto 0);
-
-    type tState is (Init, Idle, Resetting, Summing);
+    signal sSum, sFutureSum : std_logic_vector(poSum'length - 1 downto 0) := (others => '0');
+    signal sDone : std_logic;
+    type tState is (Init, Idle, Reset, Resetting, Summing);
     signal sState, sFutureState : tState;
 
     component RAM is
@@ -107,70 +106,87 @@ begin
             sWritingInRAMAddress <= sFutureWritingInRAMAddress;
             sWritingInRAMData <= sFutureWritingInRAMData;
             sWritingInRAM <= sFutureWritingInRAM;
+            sSum <= sFutureSum; 
+        else 
+            sState <= sState;
+            sWritingInRAMAddress <= sWritingInRAMAddress;
+            sWritingInRAMData <= sWritingInRAMData;
+            sWritingInRAM <= sWritingInRAM;
+            sSum <= sSum;
         end if;
     end process ; -- main
 
-    sFutureStateHandler : process( piRst, sState, sWritingInRAMAddress, sFutureWritingInRAMAddress, piStart, sLFSROut )
+    sFutureStateHandler : process( piRst, sState, sWritingInRAM, sWritingInRAMData, sWritingInRAMAddress, sFutureWritingInRAMAddress, piStart, sLFSROut, sSum, sRAMOutputData, sFutureSum )
     begin
-        if(piRst = '1') then
-            sFutureState <= Resetting;
-            sFutureWritingInRAM <= '1';
-            sFutureWritingInRAMData <= (others => '0'); 
-            sFutureWritingInRAMAddress <= (others => '0');
-            sFutureState <= Resetting;
-            sLFSREnabled <= '0';
-        else
+        sFutureSum <= sSum;
+        sFutureWritingInRAMAddress <= sWritingInRAMAddress;
+        sFutureWritingInRAM <= sWritingInRAM;
+        sFutureWritingInRAMData <= sWritingInRAMData;
+        sFutureState <= sState;
+        sLFSRLoadSeed <= '0';
+        sLFSREnabled <= '0';
+        sDone <= '0';
+        if(piRst = '1') then 
+            sFutureState <= Reset;
+        else 
             case(sState) is
-                when Resetting =>
-                    if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then
+                    when Reset =>
                         sFutureWritingInRAM <= '1';
+                        sFutureWritingInRAMData <= (others => '0'); 
                         sFutureWritingInRAMAddress <= (others => '0');
-                        sFutureState <= Init;
-                    else
-                        sFutureWritingInRAM <= '1';
-                        sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + to_unsigned(1,sFutureWritingInRAMAddress'Length));
                         sFutureState <= Resetting;
-                    end if;    
-                when Idle => 
-                    if(piStart <= '1') then 
-                        sFutureState <= Init;
-                    else 
-                        sFutureState <= Idle;
-                    end if;
-                when Init =>
-                    if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then
-                        sFutureWritingInRAM <= '1';
-                        sLFSRLoadSeed <= '0';
-                        sFutureWritingInRAMAddress <= (others => '0');
-                        sFutureState <= Summing;
-                    else
-                        sLFSRLoadSeed <= '1';
-                        sFutureWritingInRAM <= '1';
-                        sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + to_unsigned(1,sFutureWritingInRAMAddress'Length));
-                        sFutureWritingInRAMData <= sLFSROut;
-                        sFutureState <= Init;
-                    end if;
-                when Summing =>
-                    if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**DATA_WIDTH-1,DATA_WIDTH))) then
-                        sFutureWritingInRAM <= '0';
-                        sFutureState <= Idle;
-                    else 
-                        sFutureWritingInRAM <= '1';
-                        sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sFutureWritingInRAMAddress) + to_unsigned(1,sFutureWritingInRAMAddress'Length));
-                        sSum <= std_logic_vector(unsigned(sSum) + unsigned(sRAMOutputData));
-                    end if;
-                when others => 
-                    sFutureState <= Resetting;
-                    sFutureWritingInRAM <= sWritingInRAM;
-                    sFutureWritingInRAMAddress <= sWritingInRAMAddress;
-                    sFutureWritingInRAMData <= sWritingInRAMData;
-                    
-            end case ;
-        end if;
-
+                    when Resetting =>
+                        if(not(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**ADDR_WIDTH-1,ADDR_WIDTH)))) then
+                            sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sWritingInRAMAddress) + to_unsigned(1,sWritingInRAMAddress'Length));
+                            sFutureState <= Resetting;
+                            sFutureWritingInRAM <= '1';
+                        else
+                            sFutureWritingInRAM <= '0';
+                            sFutureWritingInRAMData <= sWritingInRAMData;
+                            sFutureWritingInRAMAddress <= (others => '0');
+                            sFutureSum <= (others => '0');
+                            sFutureState <= Idle;
+                        end if;    
+                    when Idle =>
+                        if(piStart = '1') then 
+                            sFutureState <= Init;
+                        else 
+                            sFutureState <= Idle;
+                        end if;
+                    when Init =>
+                        if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**ADDR_WIDTH-1,ADDR_WIDTH))) then
+                            sFutureWritingInRAM <= '1';
+                            sFutureWritingInRAMAddress <= (others => '0');
+                            sFutureState <= Summing;
+                            sLFSREnabled <= '0';
+                        else
+                            sLFSREnabled <= '1';
+                            sLFSRLoadSeed <= '1';
+                            sFutureWritingInRAM <= '1';
+                            sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sWritingInRAMAddress) + to_unsigned(1,sWritingInRAMAddress'Length));
+                            sFutureWritingInRAMData <= sLFSROut;
+                            sFutureState <= Init;
+                        end if;
+                    when Summing =>
+                        if(sWritingInRAMAddress = std_logic_vector(to_unsigned(2**ADDR_WIDTH-1,ADDR_WIDTH))) then
+                            sFutureState <= Idle;
+                            sDone <= '1';
+                            sFutureWritingInRAMAddress <= sWritingInRAMAddress; 
+                            sFutureSum <= sSum;
+                        else 
+                            sFutureWritingInRAM <= '0';
+                            sDone <= '0';
+                            sFutureWritingInRAMAddress <= std_logic_vector(unsigned(sWritingInRAMAddress) + to_unsigned(1,sWritingInRAMAddress'Length));
+                            sFutureSum <= std_logic_vector(unsigned(sSum) + unsigned(sRAMOutputData));
+                        end if;
+                    when others => 
+                        sFutureState <= Resetting;
+                end case ;
+            end if;
     end process ; -- sFutureStateHandler
 
     sLFSRSeed <= (others => '1');
-    poSum <= sSum; 
-
+    poSum <= sSum;
+    poDone <= sDone;
+    
 end ArchFSM_Ctrl ; -- ArchFSM_Ctrl
