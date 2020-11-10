@@ -4,7 +4,7 @@ use ieee.std_logic_1164.all;
 
 entity SimpleCounterWithTc is
     Generic(
-        DATA_WIDTH : natural := 7,
+        DATA_WIDTH : natural := 7;
         MODULE : natural := 7
     );
     Port (
@@ -28,7 +28,7 @@ begin
             if(piRst = '1') then
                 sRegisters <= (others => '0');
             elsif(piEna = '1') then
-                if(unsigned(sRegisters) = to_unsigned(MODULE, sRegisters'length) then 
+                if(unsigned(sRegisters) = to_unsigned(MODULE, sRegisters'length)) then 
                     sRegisters <= (others => '0');
                 else
                     sRegisters <= std_logic_vector(unsigned(sRegisters) + to_unsigned(1, sRegisters'length));
