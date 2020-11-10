@@ -39,8 +39,8 @@ architecture ArchUart_Tx of Uart_Tx is
     signal sTransmissionState, sFutureTransmissionState : tTransmissionState;
     signal sStoredData, sFutureStoredData : std_logic_vector(7 downto 0);
     signal sEnablePrescaler, sPrescalerTc : std_logic;
-    signal sTransmitting : std_logic;
-    signal sTransmissionCounter : std_logic_vector(piData'length downto 0);
+    signal sTransmitting,sRstPrescaler : std_logic;
+    signal sTransmissionCounter, sFutureTransmissionCounter : std_logic_vector(piData'length downto 0);
     constant cLINE_IDLE : std_logic := '1';
     constant cLINE_START : std_logic := '0';
     constant cLINE_END : std_logic := '1';
@@ -54,7 +54,7 @@ begin
     )
     port map (
         piClk => piClk,
-        piRst => piRst,
+        piRst => piRstPrescaler,
         piEna => sEnablePrescaler,
         poQ => open,
         poTc => sPrescalerTc
@@ -66,12 +66,13 @@ begin
             sState <= sFutureState;
             sStoredData <= sFutureStoredData;
             sTransmissionState <= sFutureTransmissionState; 
+            sTransmissionCounter <= sFutureTransmissionCounter;
         else
             sState <= sState;
         end if;
     end process ; -- main
 
-    main : process( piRst, piTxStart, sState, sFutureState, sStoredData, sTransmissionState, sTransmissionCounter, sPrescalerTc, piData )
+    main : process( piRst, piTxStart, sState, sFutureState, sStoredData, sTransmissionState, sFutureTransmissionCounter ,sTransmissionCounter, sPrescalerTc, piData )
     begin
         sFutureState <= sState;
         sFutureTransmissionState <= sTransmissionState;
@@ -79,6 +80,7 @@ begin
         sTransmitting <= cLINE_IDLE;
         poTxReady <= '0';
         sEnablePrescaler <= '0';
+        sRstPrescaler <= '0';
         if(piRst = '1') then
             sFutureState <= Idle;
             sFutureStoredData <= (others => '0');
@@ -87,6 +89,7 @@ begin
             case( sState ) is
                 when Idle =>
                     poTxReady <= '1';
+                    sRstPrescaler <= '1';
                     if (piTxStart = '1') then
                         sFutureStoredData <= piData;
                         sFutureState <= Transmitting;
@@ -98,23 +101,26 @@ begin
                     case( sTransmissionState ) is
                         when Start =>
                             sTransmitting <= cLINE_START;
-                            sFutureTransmissionState <= Payload;
+                            if(sPrescalerTc = '1') then
+                                sFutureTransmissionState <= Payload;
+                            end if;
                         when Payload =>
                             sTransmitting <= sStoredData(to_integer(unsigned(sTransmissionCounter)));
                             if(sPrescalerTc = '1') then
-                                sTransmissionCounter <= std_logic_vector(unsigned(sTransmissionCounter) + to_unsigned(1, sTransmissionCounter'length));
+                                sFutureTransmissionCounter <= sTransmissionCounter <= std_logic_vector(unsigned(sTransmissionCounter) + to_unsigned(1, sTransmissionCounter'length));
                             end if;
                             if(sTransmissionCounter = std_logic_vector(to_unsigned(sStoredData'length, sTransmissionCounter'length))) then
                                 sFutureTransmissionState <= Ending;
                             end if;
                         when Ending =>
-                            if(piTxStart = '1') then
-                                sFutureState <= Transmitting;
-                            else 
-                                sFutureState <= Idle;
-                            end if;
+                            sTransmissionCounter <= (others => '0');
                             sTransmitting <= cLINE_END;
-                            sFutureTransmissionState <= Start;
+                            if(sPrescalerTc = '1') then
+                                sEnablePrescaler <= '0';
+                                sRstPrescaler <= '0';
+                                sFutureState <= Idle;
+                                sFutureTransmissionState <= Start;
+                            end if;
                         when others =>
                             sFutureState <= Idle;
                             sTransmissionState <= Start;
