@@ -44,7 +44,7 @@ begin
         end if;
     end process ; -- clkProcess
 
-    main : process(piRst, piWriteMultiByte, piData, piReadSingleByte, sDone)
+    main : process(piRst, piWriteMultiByte, piData, piReadSingleByte, sDone, sDataAvailable, sStateCounter, sRegisters)
     begin
         if(piRst = '1') then
             sFutureStateCounter <= (others => '0');

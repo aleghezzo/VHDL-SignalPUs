@@ -21,14 +21,15 @@ end entity Productor ;
 architecture ArchProductor of Productor is
 
     type tConstTable is array(31 downto 0) of integer;
-    type tState is (Reset, Init, Transmitting, Idle);
+    type tState is (Reset, Transmitting, Idle);
     type tTransmitterState is (Idle, Processing);
     type tSerializer is (Idle, Processing);
+    type tROM is array(integer(ceil(log2(real(32))))-1 downto 0) of std_logic_vector(31 downto 0);
     constant cFibonacci : tConstTable :=   (1,1,2,3,5,8,13,21,34,55,89,144,233,377,610,987,
                                             1597,2584,4181,6765,10946,17711,28657,46368,75025,
                                             121393,196418,317811,514229,832040,1346269,2178309);
     -- Quizas deberia usar la instnacia de ROM para esto ^ pero bueno, va a interpretar una ROM igual.
-    signal sROM is array(integer(ceil(log2(real(32))))-1 downto 0) of std_logic_vector(31 downto 0);
+    signal sROM : tROM;
     
     signal sStartTx : std_logic;
     signal sTxDataInput : std_logic_vector(7 downto 0);
@@ -37,7 +38,7 @@ architecture ArchProductor of Productor is
     signal sWriteMultiByteIntoSerializer : std_logic;
     signal sSerializerInput : std_logic_vector(31 downto 0);
     signal sSerializerDataOutput : std_logic_vector(7 downto 0);
-    signal sSerializerReadByte, , sSerializerDataAvailable, sSerializerReady, sSerializerDone : std_logic;
+    signal sSerializerReadByte, sSerializerDataAvailable, sSerializerReady, sSerializerDone : std_logic;
     
     signal sStateCounter, sFutureStateCounter : std_logic_vector(integer(ceil(log2(real(32))))-1 downto 0);
     signal sTxCounter, sFutureTxCounter : std_logic_vector(integer(ceil(log2(real(4))))-1 downto 0);
@@ -45,6 +46,8 @@ architecture ArchProductor of Productor is
     signal sState, sFutureState : tState;
     signal sTransmitterState, sFutureTransmitterState : tTransmitterState;
     signal sSerializerState, sFutureSerializerState : tSerializer;
+    
+    signal sDone : std_logic;
     
     component Uart_Tx
         Generic (
@@ -83,8 +86,8 @@ architecture ArchProductor of Productor is
 
 begin
     -- ROM Values
-    identifier : for i in 0 to 31 generate
-        sROM(i) <= to_unsigned(tConstTable(i), 32);
+    identifier : for i in 0 to integer(ceil(log2(real(32))))-1 generate
+        sROM(i) <= std_logic_vector(to_unsigned(cFibonacci(i), 32));
     end generate ; -- identifier
 
     uuart: Uart_Tx
@@ -102,7 +105,7 @@ begin
 
     ubyteserializer: ByteSerializer
     generic map(
-        DATA_WIDTH  => 8;
+        DATA_WIDTH  => 8,
         AMOUNT_IN => 4
     )
     port map(
@@ -134,7 +137,9 @@ begin
         end if;
     end process ; -- ffHandler
 
-    main : process()
+    main : process(sStateCounter, sTxCounter, sState, sTransmitterState, sSerializerState,
+     sSerializerReadByte, sStartTx, sSerializerInput, sDone, piRst, sROM, sSerializerDataAvailable,
+     sTxReady, sSerializerDone, sSerializerReady, piStart)
     begin
         sFutureStateCounter <= sStateCounter;
         sFutureTxCounter <= sTxCounter;
@@ -144,25 +149,26 @@ begin
         sFutureSerializerState <= sSerializerState;
 
         sSerializerReadByte <= '0';
+        sWriteMultiByteIntoSerializer <= '0';
         sStartTx <= '0';
         sSerializerInput <= sROM(to_integer(unsigned(sStateCounter)));
         sDone <= '0'; 
-
+        
         if(piRst = '1') then
             sFutureState <= Reset;
             sFutureStateCounter <= (others => '0');
         else 
             case( sState ) is
                 when Reset =>
-                    sFutureState <= Init;
-                    sFutureTransmittingState <= Idle;
+                    sFutureState <= Idle;
+                    sFutureTransmitterState <= Idle;
                     sFutureSerializerState <= Idle;
                     sFutureStateCounter <= (others => '0');
                     sFutureTxCounter <= (others => '0');
-                when Transmiting =>
+                when Transmitting =>
                     case(sTransmitterState) is
                         when Idle =>
-                            if(sSerializerDataAvailable = '1' & sTxReady = '1') then
+                            if(sSerializerDataAvailable = '1' and sTxReady = '1') then
                                 sSerializerReadByte <= '1';
                                 sStartTx <= '1';
                                 sFutureTransmitterState <= Processing;
@@ -184,7 +190,7 @@ begin
                                 sFutureSerializerState <= Idle;
                             end if;
                         when Idle =>
-                            if(sStateCounter = std_logic_vector(to_unsigned(32-1,sStateCounter'length)))
+                            if(sStateCounter = std_logic_vector(to_unsigned(31,sStateCounter'length))) then
                                 sFutureState <= Idle;
                                 sDone <= '1';
                                 sFutureStateCounter <= (others => '0');
@@ -205,4 +211,5 @@ begin
         end if;
     end process ; -- main
     sTxDataInput <= sSerializerDataOutput;
+    poDone <= sDone;
 end ArchProductor ; -- ArchProductor

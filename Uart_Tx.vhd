@@ -54,7 +54,7 @@ begin
     )
     port map (
         piClk => piClk,
-        piRst => piRstPrescaler,
+        piRst => sRstPrescaler,
         piEna => sEnablePrescaler,
         poQ => open,
         poTc => sPrescalerTc
@@ -69,6 +69,9 @@ begin
             sTransmissionCounter <= sFutureTransmissionCounter;
         else
             sState <= sState;
+            sStoredData <= sStoredData;
+            sTransmissionState <= sTransmissionState; 
+            sTransmissionCounter <= sTransmissionCounter;
         end if;
     end process ; -- main
 
@@ -76,15 +79,17 @@ begin
     begin
         sFutureState <= sState;
         sFutureTransmissionState <= sTransmissionState;
+        sFutureTransmissionCounter <= sTransmissionCounter;
         sFutureStoredData <= sStoredData;
         sTransmitting <= cLINE_IDLE;
         poTxReady <= '0';
         sEnablePrescaler <= '0';
         sRstPrescaler <= '0';
         if(piRst = '1') then
-            sFutureState <= Idle;
             sFutureStoredData <= (others => '0');
-            sTransmissionState <= Start;
+            sFutureTransmissionCounter <= (others => '0');
+            sFutureState <= Idle;
+            sFutureTransmissionState <= Start;
         else
             case( sState ) is
                 when Idle =>
@@ -107,13 +112,13 @@ begin
                         when Payload =>
                             sTransmitting <= sStoredData(to_integer(unsigned(sTransmissionCounter)));
                             if(sPrescalerTc = '1') then
-                                sFutureTransmissionCounter <= sTransmissionCounter <= std_logic_vector(unsigned(sTransmissionCounter) + to_unsigned(1, sTransmissionCounter'length));
+                                sFutureTransmissionCounter <= std_logic_vector(unsigned(sTransmissionCounter) + to_unsigned(1, sTransmissionCounter'length));
                             end if;
                             if(sTransmissionCounter = std_logic_vector(to_unsigned(sStoredData'length-1, sTransmissionCounter'length))) then
                                 sFutureTransmissionState <= Ending;
                             end if;
                         when Ending =>
-                            sTransmissionCounter <= (others => '0');
+                            sFutureTransmissionCounter <= (others => '0');
                             sTransmitting <= cLINE_END;
                             if(sPrescalerTc = '1') then
                                 sEnablePrescaler <= '0';
@@ -123,11 +128,8 @@ begin
                             end if;
                         when others =>
                             sFutureState <= Idle;
-                            sTransmissionState <= Start;
+                            sFutureTransmissionState <= Start;
                     end case ;
-                when others =>
-                    sFutureState <= Idle;
-                    sTransmissionState <= Start;
             end case ;
         end if;
     end process ; -- main
