@@ -102,7 +102,7 @@ begin
                                 sFutureReceptionState <= Ending;
                             end if;
                         when Ending =>
-                            if(sPrescalerTc = '1') then
+                            if(sPrescalerTc = '1' & piRx = cLINE_END) then
                                 sFutureState <= Idle;
                                 sFutureReceptionState <= Start;
                             end if;

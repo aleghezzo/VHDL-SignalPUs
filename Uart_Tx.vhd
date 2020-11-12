@@ -12,7 +12,7 @@ entity Uart_Tx is
         piRst : in std_logic ;
         piTxStart : in std_logic ;
         poTxReady : out std_logic ;
-        piData : in std_logic_vector (8 -1 downto 0) ;
+        piData : in std_logic_vector (8-1 downto 0) ;
         poTx : out std_logic
     ) ;
 end entity Uart_Tx ;
@@ -109,7 +109,7 @@ begin
                             if(sPrescalerTc = '1') then
                                 sFutureTransmissionCounter <= sTransmissionCounter <= std_logic_vector(unsigned(sTransmissionCounter) + to_unsigned(1, sTransmissionCounter'length));
                             end if;
-                            if(sTransmissionCounter = std_logic_vector(to_unsigned(sStoredData'length, sTransmissionCounter'length))) then
+                            if(sTransmissionCounter = std_logic_vector(to_unsigned(sStoredData'length-1, sTransmissionCounter'length))) then
                                 sFutureTransmissionState <= Ending;
                             end if;
                         when Ending =>
