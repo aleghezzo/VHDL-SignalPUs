@@ -21,7 +21,7 @@ architecture ArchConsumidor of Consumidor is
     
     component Uart_Rx is
         Generic (
-            BAUD_RATE_PRESCALLER : NATURAL
+            BAUD_RATE_PRESCALLER : NATURAL := 3
         ) ;
         Port (
             piClk : in std_logic ;
@@ -49,16 +49,19 @@ architecture ArchConsumidor of Consumidor is
         );
     end component ByteDeSerializer ;
 
-    signal sRxAvailable, sRxDataOut, sRxInput : std_logic;
-    signal sWriteSingleByteIntoDeserializer, sDeserializerReadMultiByte, sRxInput : std_logic;
-    signal sDeserializerInput : std_logic_vector(7 downto 0);
-
+    signal sRxAvailable, sRxInput, sDeserializerReady, sDeserializerDataAvailable, sDone : std_logic;
+    signal sWriteSingleByteIntoDeserializer, sDeserializerReadMultiByte, sMissedByte : std_logic;
+    signal sDeserializerInput, sRxDataOut, sFutureBuffer, sBuffer : std_logic_vector(7 downto 0);
+    signal sDeserializerOutput: std_logic_vector(31 downto 0);
+    
+    type tState is (Ready, Busy);
+    signal sState, sFutureState : tState;
     
 begin
 
     uuartrx: Uart_Rx 
     generic map (
-        BAUD_RATE_PRESCALLER : NATURAL
+        BAUD_RATE_PRESCALLER => 3
     )
     port map (
         piClk => piClk,
@@ -68,50 +71,61 @@ begin
         piRx => sRxInput
     );
 
-    ubytedeserializer: Uart_Rx 
+    ubytedeserializer: ByteDeSerializer 
     generic map (
-        DATA_WIDTH => 8
+        DATA_WIDTH => 8,
         AMOUNT_IN => 4
     )
     port map (
         piClk => piClk,
         piRst => piRst,
-        piWriteSingleByte => sWriteSingleByteIntoDeserializer;
-        piData => sDeserializerInput;
-        piReadMultiByte => sDeserializerReadMultiByte
-        poReady => sDeserializerReady;
-        poData => sDeserializerOutput;
+        piWriteSingleByte => sWriteSingleByteIntoDeserializer,
+        piData => sDeserializerInput,
+        piReadMultiByte => sDeserializerReadMultiByte,
+        poReady => sDeserializerReady,
+        poData => sDeserializerOutput,
         poDataAvailable => sDeserializerDataAvailable
     );
 
     ffHandler : process(piClk)
     begin
         if rising_edge(piClk) then
-            sStateCounter <= sFutureStateCounter;
             sState <= sFutureState;
-            sRxCounter <= sFutureRxCounter;
+            sBuffer <= sFutureBuffer;
         else
-            sStateCounter <= sStateCounter;
             sState <= sState;
-            sReceptorState <= sReceptorState;
-            sDeserializerState <= sDeserializerState;
-            sRxCounter <= sRxCounter;
+            sBuffer <= sBuffer;
         end if;
     end process ; -- ffHandler
 
     main : process( all )
-   begin
+    begin
     sDone <= '0'; 
     sWriteSingleByteIntoDeserializer <= '0';
     sDeserializerReadMultiByte <= '0'; 
+    sFutureState <= Ready when sDeserializerReady = '1' else Busy;
+    sFutureBuffer <= sBuffer; 
+    sMissedByte <= '0';
+    case(sState) is
+      when Ready =>
+        if(sRxAvailable = '1' or sMissedByte = '1') then
+          sWriteSingleByteIntoDeserializer <= '1';
+        end if;
+      when Busy =>
+         if (sRxAvailable = '1') then
+            sFutureBuffer <= sRxDataOut;
+            sMissedByte <= '1';
+         end if;
+    end case;
+    
     if(sDeserializerDataAvailable = '1') then
         sDeserializerReadMultiByte <= '1';
+        sDone <= '1';
     end if;
-    if(sRxAvailable = '1') then
-        piWriteSingleByte = '1';
-    end if;
+        
    end process ; -- main
-   sDeserializerInput <= sRxDataOut;
+   sDeserializerInput <= sRxDataOut when sMissedByte = '0' else sBuffer;
    poDone <= sDone;
    poData <= sDeserializerOutput;
+   sRxInput <= piRx;
 end ArchConsumidor ; -- ArchProductor

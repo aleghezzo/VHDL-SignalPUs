@@ -5,7 +5,7 @@ use ieee.math_real.all;
 
 entity Uart_Rx is
     Generic (
-        BAUD_RATE_PRESCALLER : NATURAL
+        BAUD_RATE_PRESCALLER : NATURAL:= 3
     ) ;
     Port (
         piClk : in std_logic ;
@@ -71,7 +71,7 @@ begin
         end if;
     end process ; -- main
 
-    main : process(sState)
+    main : process(all)
     begin
         sFutureState <= sState;
         sFutureReceptionState <= sReceptionState;
@@ -82,7 +82,7 @@ begin
         if(piRst = '1') then
             sFutureState <= Idle;
             sFutureStoredData <= (others => '0');
-            sReceptionState <= Start;
+            sFutureReceptionState <= Start;
             sFutureReceptionCounter <= (others => '0');
         else
             case( sState ) is
@@ -104,6 +104,7 @@ begin
                         when Payload =>
                             if(sPrescalerTc = '1') then
                                 sFutureReceptionCounter <= std_logic_vector(unsigned(sReceptionCounter) + to_unsigned(1, sReceptionCounter'length));
+                                sFutureStoredData(to_integer(unsigned(sReceptionCounter))) <= piRx;
                             end if;
                             if(sReceptionCounter = std_logic_vector(to_unsigned(sStoredData'length, sReceptionCounter'length))) then
                                 sFutureReceptionState <= Ending;
@@ -115,7 +116,7 @@ begin
                             end if;
                         when others =>
                             sFutureState <= Idle;
-                            sReceptionState <= Start;
+                            sFutureReceptionState <= Start;
                     end case;
                 when others =>
                     sFutureState <= Idle;
@@ -124,5 +125,6 @@ begin
         end if;
     end process ; -- main
     sReceiving <= piRx;
+    poData <= sStoredData;
 
 end ArchUart_Rx ; -- arch
