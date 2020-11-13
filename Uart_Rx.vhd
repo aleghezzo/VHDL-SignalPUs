@@ -94,7 +94,7 @@ begin
                 when Receiving =>
                     poRxAvailable <= '0';
                     sEnablePrescaler <= '1';
-                    case( sReceptionState ) is
+                    case(sReceptionState) is
                         when Start =>
                             sFutureReceptionCounter <= (others => '0');
                             if(sPrescalerTc = '1') then
@@ -116,7 +116,7 @@ begin
                         when others =>
                             sFutureState <= Idle;
                             sReceptionState <= Start;
-                    end case ;
+                    end case;
                 when others =>
                     sFutureState <= Idle;
                     sReceptionState <= Start;
